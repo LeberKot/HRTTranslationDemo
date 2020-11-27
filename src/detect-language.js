@@ -1,7 +1,6 @@
 const LanguageTranslatorV3 = require('ibm-watson/language-translator/v3');
 const { IamAuthenticator } = require('ibm-watson/auth');
 
-
 /**
  * Helper 
  * @param {*} errorMessage 
@@ -47,20 +46,52 @@ function main(params) {
       // in case of errors during the call resolve with an error message according to the pattern 
       // found in the catch clause below
 
-      resolve({
-        statusCode: 200,
-        body: {
-          text: params.text, 
-          language: "<Best Language>",
-          confidence: 0.5,
-        },
-        headers: { 'Content-Type': 'application/json' }
+      console.log(params.text);
+
+      if (!params.text || params.text === '') {
+        console.error('Invalid input text', err);
+        resolve(getTheErrorResponse('Invalid input text', defaultLanguage));
+      }
+
+      const languageTranslator = new LanguageTranslatorV3({
+        version: params.version,
+        authenticator: new IamAuthenticator({
+          apikey: params.apikey,
+        }),
+        serviceUrl: params.url,
       });
+
+      const identifyParams = {
+        text: params.text
+      };
+
+      languageTranslator.identify(identifyParams)
+        .then(identifiedLanguages => {
+          if (identifiedLanguages.result.languages.length > 0) {
+            let identifiedLanguage = identifiedLanguages.result.languages[0];
+            resolve({
+              statusCode: 200,
+              body: {
+                text: params.text,
+                language: identifiedLanguage.language,
+                confidence: identifiedLanguage.confidence,
+              },
+              target: params.target,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          } else {
+            resolve(getTheErrorResponse('No language could be identified', defaultLanguage));
+          }
+        })
+        .catch(err => {
+          console.error('Error while communicating with the language service', err);
+          resolve(getTheErrorResponse('Error while communicating with the language service', defaultLanguage));
+        });
 
 
     } catch (err) {
       console.error('Error while initializing the AI service', err);
-      resolve(getTheErrorResponse('Error while communicating with the language service', defaultLanguage));
+      resolve(getTheErrorResponse('Error while initializing the language service', defaultLanguage));
     }
   });
 }
